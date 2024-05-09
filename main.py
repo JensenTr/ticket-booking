@@ -25,7 +25,7 @@ def process_order(tickets: List[Ticket]):
         return False
     else:
         remaining_tickets -= quantity
-        return True
+        return total, quantity
 
 
 # class GUI(ctk.CTk):
