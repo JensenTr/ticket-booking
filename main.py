@@ -28,6 +28,14 @@ def process_order(tickets: List[Ticket]):
         return total, quantity
 
 
-# class GUI(ctk.CTk):
-#     def __init__(self):
-#         ctk.set_appearance_mode('system')
+class GUI(ctk.CTk):
+    def __init__(self):
+        super().__init__(fg_color='#FFFCFC')
+        self.geometry('500x612'), self.resizable(False, False)
+        self.title('Ticket Booking')
+        ctk.set_appearance_mode('system')
+        self.mainloop()
+        
+
+if __name__ == '__main__':
+    GUI()
