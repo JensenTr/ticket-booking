@@ -42,6 +42,28 @@ class GUI(ctk.CTk):
         :param tickets: :class:`list` [:class:`tuple` (:class:`str` ``name``, :class:`float` ``price``), ...]
     """
     def __init__(self, tickets: List[tuple[str, float]]):
+        def _u():  # Update calculation
+            def _err(msg: str):
+                calculate.c1.configure(text=msg, text_color="#cc0000", font=('JetBrains Mono NL', 18))
+                calculate.c2.configure(text='')
+                self._err_state = True
+
+            def _err_reset():
+                calculate.c1.configure(text='Total Price:', text_color='#676767', font=('JetBrains Mono NL', 24))
+                calculate.c2.configure(text='$0.00')
+                self._err_state = False
+
+            if self._err_state:
+                _err_reset()
+
+            values = [(int(q) if not (q := o.entry.get()).isspace() and q != '' else 0, o.price)
+                      for o in ticket_objects]
+            if sum([q for q, _ in values]) > remaining_tickets:
+                _err('Your order exceeds the amount of remaining tickets!')
+            else:
+                total = sum([p * q for p, q in values])
+                calculate.c2.configure(text=f'${total:.2f}')
+
         class TicketsFrame(ctk.CTkFrame):
             """ Frame for containing tickets & information. """
 
@@ -60,6 +82,7 @@ class GUI(ctk.CTk):
 
                         super().__init__(master, width=450, height=95, fg_color='#F4F4F4', corner_radius=0)
                         self.grid_propagate(False)
+                        self.price = price
                         ctk.CTkLabel(self, text=name, text_color="#434343", font=('Segoe UI', 24)).grid(
                             row=0, column=0, sticky='w', padx=(20, 0), pady=(15, 0))
                         ctk.CTkLabel(self, text=f'${price:.2f}', text_color="#245A23", font=('Segoe UI', 24)).grid(
@@ -68,6 +91,8 @@ class GUI(ctk.CTk):
                         self.entry = ctk.CTkEntry(self, width=150, height=95, fg_color='#CACACA', corner_radius=0,
                                                   font=('JetBrains Mono NL', 40), text_color='#302265', justify='c',
                                                   validate='key', validatecommand=(master.register(_v), '%P', '%d'))
+                        # 1ms to allow .get() to get new value
+                        self.entry.bind('<KeyPress>', lambda _: self.after(1, _u))
                         self.entry.place(x=self.winfo_x() + 300, y=0)
 
                 def __init__(self, master):
@@ -91,8 +116,12 @@ class GUI(ctk.CTk):
             def __init__(self, master):
                 super().__init__(master, width=450, height=70, fg_color='transparent')
                 self.grid_propagate(False), self.grid_anchor('w')
-                ctk.CTkLabel(self, text='Total Price:', text_color='#676767', font=('JetBrains Mono NL', 24),
-                             height=70).grid(row=0, column=0)
+                # Component 1 & 2: text and value respectively
+                self.c1 = ctk.CTkLabel(self, text='Total Price:', text_color='#000000', font=('JetBrains Mono NL', 24),
+                                       height=70, wraplength=450, justify='left')
+                self.c2 = ctk.CTkLabel(self, text='$0.00', text_color='#2D932B', font=('JetBrains Mono NL Bold', 24),
+                                       height=70)
+                self.c1.grid(row=0, column=0), self.c2.grid(row=0, column=1, padx=(10, 0))
 
         ctk.set_appearance_mode('system'), super().__init__(fg_color='#FFFCFC')
         self.geometry('500x612'), self.resizable(False, False)
@@ -104,10 +133,16 @@ class GUI(ctk.CTk):
         # Objects and components
         ticket_objects = []  # Holds all ticket objects for calculation
         self.grid_anchor('c'), self.grid_propagate(False)
+        # Header
         ctk.CTkLabel(self, text='Ticket Booking', text_color='#000000', font=('JetBrains Mono NL Bold', 32)).grid(
             row=0, column=0, pady=(50, 25), sticky='w')
         TicketsFrame(self).grid(row=1, column=0)
-        Calculate(self).grid(row=2, column=0)
+        # Calculation frame where values are shown, _err_state used for determining entry errors
+        calculate, self._err_state = Calculate(self), False
+        calculate.grid(row=2, column=0)
+        self.remaining = ctk.CTkLabel(self, text=f'Tickets Remaining: #{remaining_tickets}', text_color='#676767',
+                                      font=('Segoe UI', 17))
+        self.remaining.grid(row=3, column=0, sticky='w')
         #
         self.mainloop()
         
