@@ -17,7 +17,7 @@ class GUI(ctk.CTk):
         :param tickets: :class:`list` [:class:`tuple` (:class:`str` ``name``, :class:`float` ``price``), ...]
     """
     def __init__(self, tickets: List[tuple[str, float]]):
-        def _process_order(quantity: int, total: float):
+        def _process_order(quantity: int, total: float):  # 'total' will be used for v3.0
             global total_tickets
             if (total_tickets - quantity) <= 0:
                 # No remaining tickets
@@ -136,6 +136,7 @@ class GUI(ctk.CTk):
         # Calculation frame where values are shown, _err_state used for determining entry errors
         calculate, self._err_state = Calculate(self), False
         calculate.grid(row=2, column=0)
+        # noinspection PyUnboundLocalVariable
         remaining = ctk.CTkLabel(self, text=f'Tickets Remaining: #{total_tickets}', text_color='#676767',
                                  font=('Segoe UI', 17))
         remaining.grid(row=3, column=0, sticky='w', pady=(0, 60))
