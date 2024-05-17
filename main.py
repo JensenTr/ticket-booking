@@ -1,38 +1,13 @@
 """
     Ticket Booking system
 
-    - Jensen Trillo, **pre-v2**, 14/05/2024
+    - Jensen Trillo, **v2.0**, 17/05/2024
     - ``Python 3.11.6``
 """
 import customtkinter as ctk
 from typing import List
 TICKETS = [('Child', 5), ('Student/Senior', 10), ('Adult', 15)]
-remaining_tickets = 100
-
-
-class Ticket:
-    def __calc_subtotal(self):
-        return self.price * self.quantity
-
-    def __init__(self, name: str, price: float, quantity: int):
-        self.name, self.price, self.quantity = name, price, quantity
-        self.subtotal = self.__calc_subtotal()
-
-
-def process_order(tickets: List[Ticket]):
-    """
-        Processes an order with the given tickets.
-
-        :param tickets: :class:`list` [:class:`Ticket`, ...]
-        :returns: :class:`bool` Whether the order was successful
-    """
-    global remaining_tickets
-    total, quantity = sum([n.subtotal for n in tickets]), sum([n.quantity for n in tickets])
-    if (remaining_tickets - quantity) < 0:
-        return False
-    else:
-        remaining_tickets -= quantity
-        return total, quantity
+total_tickets = 100
 
 
 class GUI(ctk.CTk):
@@ -42,27 +17,47 @@ class GUI(ctk.CTk):
         :param tickets: :class:`list` [:class:`tuple` (:class:`str` ``name``, :class:`float` ``price``), ...]
     """
     def __init__(self, tickets: List[tuple[str, float]]):
-        def _u():  # Update calculation
+        def _process_order(quantity: int, total: float):
+            global total_tickets
+            if (total_tickets - quantity) <= 0:
+                # No remaining tickets
+                for w in self.winfo_children():  # Destroy all widgets
+                    w.destroy()
+                # Place message
+                ctk.CTkLabel(self, text='All tickets have been purchased, sorry!', text_color="#cc0000",
+                             font=('JetBrains Mono NL', 26), wraplength=450).grid()
+            else:
+                total_tickets -= quantity
+                calculate.c2.configure(text='$0.00')
+                remaining.configure(text=f'Tickets Remaining: #{total_tickets}')
+                for o in ticket_objects:  # Clear entry
+                    o.entry.delete(0, 'end')
+
+        def _get_values() -> List[tuple[int, float]]:
+            return [(int(q) if not (q := o.entry.get()).isspace() and q != '' else 0, o.price)
+                    for o in ticket_objects]
+
+        def _update():  # Update calculation
             def _err(msg: str):
                 calculate.c1.configure(text=msg, text_color="#cc0000", font=('JetBrains Mono NL', 18))
                 calculate.c2.configure(text='')
+                button.configure(state='disabled', border_color='#979797')
                 self._err_state = True
 
             def _err_reset():
                 calculate.c1.configure(text='Total Price:', text_color='#676767', font=('JetBrains Mono NL', 24))
                 calculate.c2.configure(text='$0.00')
+                button.configure(state='normal', border_color='#40ACE3')
                 self._err_state = False
 
             if self._err_state:
                 _err_reset()
-
-            values = [(int(q) if not (q := o.entry.get()).isspace() and q != '' else 0, o.price)
-                      for o in ticket_objects]
-            if sum([q for q, _ in values]) > remaining_tickets:
+            values = _get_values()
+            if sum([q for q, _ in values]) > total_tickets:
                 _err('Your order exceeds the amount of remaining tickets!')
             else:
                 total = sum([p * q for p, q in values])
-                calculate.c2.configure(text=f'${total:.2f}')
+                calculate.c2.configure(text=f'${total:,.2f}')
 
         class TicketsFrame(ctk.CTkFrame):
             """ Frame for containing tickets & information. """
@@ -76,7 +71,7 @@ class GUI(ctk.CTk):
                     def __init__(self, master, name: str, price: float):
                         def _v(s: str, a) -> bool:  # Validate command
                             if int(a) == 1:  # Input
-                                return s.isdigit() and int(s) <= remaining_tickets
+                                return s.isdigit() and int(s) <= total_tickets
                             else:  # Deletion
                                 return True
 
@@ -92,7 +87,7 @@ class GUI(ctk.CTk):
                                                   font=('JetBrains Mono NL', 40), text_color='#302265', justify='c',
                                                   validate='key', validatecommand=(master.register(_v), '%P', '%d'))
                         # 1ms to allow .get() to get new value
-                        self.entry.bind('<KeyPress>', lambda _: self.after(1, _u))
+                        self.entry.bind('<KeyPress>', lambda _: self.after(1, _update))
                         self.entry.place(x=self.winfo_x() + 300, y=0)
 
                 def __init__(self, master):
@@ -130,9 +125,10 @@ class GUI(ctk.CTk):
         ctk.FontManager().load_font('assets/JetBrainsMonoNL-Regular.ttf')
         ctk.FontManager().load_font('assets/segoeui.ttf')
         #
+        # ---
         # Objects and components
         ticket_objects = []  # Holds all ticket objects for calculation
-        self.grid_anchor('c'), self.grid_propagate(False)
+        self.grid_anchor('center'), self.grid_propagate(False)
         # Header
         ctk.CTkLabel(self, text='Ticket Booking', text_color='#000000', font=('JetBrains Mono NL Bold', 32)).grid(
             row=0, column=0, pady=(50, 25), sticky='w')
@@ -140,9 +136,17 @@ class GUI(ctk.CTk):
         # Calculation frame where values are shown, _err_state used for determining entry errors
         calculate, self._err_state = Calculate(self), False
         calculate.grid(row=2, column=0)
-        self.remaining = ctk.CTkLabel(self, text=f'Tickets Remaining: #{remaining_tickets}', text_color='#676767',
-                                      font=('Segoe UI', 17))
-        self.remaining.grid(row=3, column=0, sticky='w')
+        remaining = ctk.CTkLabel(self, text=f'Tickets Remaining: #{total_tickets}', text_color='#676767',
+                                 font=('Segoe UI', 17))
+        remaining.grid(row=3, column=0, sticky='w', pady=(0, 60))
+        button = ctk.CTkButton(self, fg_color='transparent', border_color='#40ACE3', border_width=2,
+                               text='Place Order', text_color='#40ACE3', width=150, height=40,
+                               hover_color='#e4f1f7', font=('Segoe UI', 18),
+                               command=lambda: _process_order(sum([q for q, _ in _get_values()]),  # Quantity
+                                                              # Get the total price
+                                                              float(calculate.c2.cget('text').replace('$', ''))))
+        button.place(x=325, y=525)
+        # ---
         #
         self.mainloop()
         
