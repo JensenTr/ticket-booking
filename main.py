@@ -1,7 +1,7 @@
 """
     Ticket Booking system
 
-    - Jensen Trillo, **pre-v3.0**, 20/05/2024
+    - Jensen Trillo, **v3.0**, 21/05/2024
     - ``Python 3.11.6``
 """
 import customtkinter as ctk
@@ -9,6 +9,7 @@ from ujson import dumps, loads
 from typing import List
 from signal import signal, SIGINT, SIGTERM
 from atexit import register as exit_register
+from datetime import datetime
 
 # Tickets: list[tuple(name, price)]
 TICKETS = [('Child', 5), ('Student/Senior', 10), ('Adult', 15)]
@@ -52,23 +53,36 @@ class GUI(ctk.CTk):
             }
             self.__write_json(self.json)
 
-        def process_order(quantity: int, total: float):  # 'total' will be used for v3.0
-            if (self.json['tickets'] - quantity) <= 0:
-                # No remaining tickets
-                for w in self.winfo_children():  # Destroy all widgets
-                    w.destroy()
-                # Place message
-                ctk.CTkLabel(self, text='All tickets have been purchased, sorry!', text_color="#cc0000",
-                             font=('JetBrains Mono NL', 26), wraplength=450).grid()
+        def no_tickets_widgets():
+            # No remaining tickets
+            for w in self.winfo_children():  # Destroy all widgets
+                w.destroy()
+            # Place message
+            ctk.CTkLabel(self, text='All tickets have been purchased, sorry!', text_color="#cc0000",
+                         font=('JetBrains Mono NL', 26), wraplength=450).grid()
+
+        def process_order(data: list, quantity: int, total: float):  # 'total' will be used for v3.0
+            if (self.json['tickets'] - quantity) <= 0:  # No tickets remaining
+                no_tickets_widgets()
+                self.json['tickets'] = 0
             else:
                 self.json['tickets'] -= quantity
-                calculate.c2.configure(text='$0.00')
+                # Save order to JSON
+                self.json['orders'][date := datetime.now().strftime('%a %d %b, %I:%M %p')] = {n: {
+                    'quantity': q,
+                    'price_per_ticket': p,
+                    'total': q * p
+                } for q, p, n in data if q > 0}
+                self.json['orders'][date]['total'] = total
+                #
+                calculate.c2.configure(text='$0.00')  # Reset price
+                # Change remaining tickets
                 remaining.configure(text=f'Tickets Remaining: #{self.json["tickets"]}')
                 for o in ticket_objects:  # Clear entry
                     o.entry.delete(0, 'end')
 
         def get_values() -> List[tuple[int, float]]:
-            return [(int(q) if not (q := o.entry.get()).isspace() and q != '' else 0, o.price)
+            return [(int(q) if not (q := o.entry.get()).isspace() and q != '' else 0, o.price, o.name)
                     for o in ticket_objects]
 
         def update():  # Update calculation
@@ -87,11 +101,13 @@ class GUI(ctk.CTk):
             if self._err_state:
                 err_reset()
             values = get_values()
-            if sum([q for q, _ in values]) > self.json['tickets']:
+            if (total_q := sum([q for q, _, _ in values])) > self.json['tickets']:
                 err('Your order exceeds the amount of remaining tickets!')
+            elif total_q == 0:  # Gray out button on 0 quantity
+                button.configure(state='disabled', border_color='#979797')
             else:
-                total = sum([p * q for p, q in values])
-                calculate.c2.configure(text=f'${total:,.2f}')
+                button.configure(state='normal', border_color='#40ACE3')
+                calculate.c2.configure(text=f'${sum([p * q for p, q, _ in values]):,.2f}')
 
         class TicketsFrame(ctk.CTkFrame):
             """ Frame for containing tickets & information. """
@@ -107,7 +123,7 @@ class GUI(ctk.CTk):
 
                         super().__init__(_master, 450, 95, 0, fg_color='#F4F4F4')
                         self.grid_propagate(False)
-                        self.price = price
+                        self.name, self.price = name, price
                         ctk.CTkLabel(self, text=name, text_color="#434343", font=('Segoe UI', 24)).grid(
                             row=0, column=0, sticky='w', padx=(20, 0), pady=(15, 0))
                         ctk.CTkLabel(self, text=f'${price:.2f}', text_color="#245A23", font=('Segoe UI', 24)).grid(
@@ -157,23 +173,28 @@ class GUI(ctk.CTk):
         #
         # ---
         # Objects and components
-        ticket_objects = []  # Holds all ticket objects for calculation
-        # Header
-        ctk.CTkLabel(self, text='Ticket Booking', text_color='#000000', font=('JetBrains Mono NL Bold', 32)).grid(
-            row=0, column=0, pady=(50, 25), sticky='w')
-        TicketsFrame(self).grid(row=1, column=0)
-        # Calculation frame where values are shown, _err_state used for determining entry errors
-        calculate, self._err_state = Calculate(self), False
-        calculate.grid(row=2, column=0)
-        remaining = ctk.CTkLabel(self, text=f'Tickets Remaining: #{self.json["tickets"]}', text_color='#676767',
-                                 font=('Segoe UI', 17))
-        remaining.grid(row=3, column=0, sticky='w', pady=(0, 60))
-        button = ctk.CTkButton(self, 150, 40, fg_color='transparent', border_color='#40ACE3', border_width=2,
-                               text='Place Order', text_color='#40ACE3', hover_color='#e4f1f7', font=('Segoe UI', 18),
-                               command=lambda: process_order(sum([q for q, _ in get_values()]),  # Quantity
-                                                             # Get the total price
-                                                             float(calculate.c2.cget('text').replace('$', ''))))
-        button.place(x=325, y=525)
+        if self.json['tickets'] <= 0:  # On startup, if tickets <= 0 display error screen
+            no_tickets_widgets()
+        else:
+            ticket_objects = []  # Holds all ticket objects for calculation
+            # Header
+            ctk.CTkLabel(self, text='Ticket Booking', text_color='#000000', font=('JetBrains Mono NL Bold', 32)).grid(
+                row=0, column=0, pady=(50, 25), sticky='w')
+            TicketsFrame(self).grid(row=1, column=0)
+            # Calculation frame where values are shown, _err_state used for determining entry errors
+            calculate, self._err_state = Calculate(self), False
+            calculate.grid(row=2, column=0)
+            remaining = ctk.CTkLabel(self, text=f'Tickets Remaining: #{self.json["tickets"]}', text_color='#676767',
+                                     font=('Segoe UI', 17))
+            remaining.grid(row=3, column=0, sticky='w', pady=(0, 60))
+            button = ctk.CTkButton(self, 150, 40, fg_color='transparent', border_color='#979797', border_width=2,
+                                   text='Place Order', text_color='#40ACE3', hover_color='#e4f1f7',
+                                   font=('Segoe UI', 18), state='disabled',
+                                   command=lambda: process_order(data := get_values(),
+                                                                 sum([q for q, _, _ in data]),  # Quantity
+                                                                 # Get the total price
+                                                                 float(calculate.c2.cget('text').replace('$', ''))))
+            button.place(x=325, y=525)
         # ---
         self.mainloop()
         
