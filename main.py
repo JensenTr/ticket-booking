@@ -81,7 +81,7 @@ class GUI(ctk.CTk):
                 for o in ticket_objects:  # Clear entry
                     o.entry.delete(0, 'end')
 
-        def get_values() -> List[tuple[int, float]]:
+        def get_values() -> List[tuple[int, float, str]]:
             return [(int(q) if not (q := o.entry.get()).isspace() and q != '' else 0, o.price, o.name)
                     for o in ticket_objects]
 
